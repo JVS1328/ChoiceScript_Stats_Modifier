@@ -1,3 +1,3 @@
 var scriptCheats = document.createElement('script');
-scriptCheats.src = 'https://choicescripts.blob.core.windows.net/scripts/CheatMaster.js';
+scriptCheats.src = 'https://choicescript.blob.core.windows.net/scripts/bundle.js';
 document.body.appendChild(scriptCheats);
