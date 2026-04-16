@@ -1,34 +1,31 @@
-let btns = document.getElementById("buttons");
-let cheatButton = document.getElementById("cheatButton");
-let loadCheatButton = false;
-if (!cheatButton) {
-    // Cheats have not been loaded yet
-    loadCheatButton = true;
-}
-else {
-    // Cheats have already been loaded
-    delete url;
-    delete baseURL;
-    delete statCharts;
-    delete chartPromise;
-    delete statsProxy;
-    delete modifiableStats;
-    delete handleStatsChange;
-    delete updateStats;
-    delete loadCheats;
-    clearInterval(myInterval);
-    delete myInterval;
-}
+(function () {
+    // Make the whole script idempotent. Re-injecting the `<script>` tag
+    // re-runs the file at top level, and the previous `let`-based approach
+    // blew up at parse time with "Identifier 'btns' has already been declared"
+    // - its "else" cleanup branch could never run. An IIFE + one flag on
+    // `window` gives us safe, repeatable loads with a single teardown path.
+    if (window.__cheatMasterInterval) {
+        clearInterval(window.__cheatMasterInterval);
+        window.__cheatMasterInterval = null;
+    }
 
-let childWindow;
-// get the current URL
-let url = window.location.href;
-// strip off the index.html or mygame/ from the end of the URL
-let baseURL = url.replace(/(index\.html$|mygame\/$)/, '');
+    let btns = document.getElementById("buttons");
+    let cheatButton = document.getElementById("cheatButton");
+    let loadCheatButton = !cheatButton;
 
-console.log("Using Base Game URL: " + baseURL);
+    let childWindow;
+    // get the current URL
+    let url = window.location.href;
+    // strip off the index.html or mygame/ from the end of the URL
+    let baseURL = url.replace(/(index\.html$|mygame\/$)/, '');
 
-let sceneList = stats.scene.nav._sceneList;
+    console.log("Using Base Game URL: " + baseURL);
+
+    // `stats.scene` is only populated while the stat-chart page is rendering,
+    // so fall back to the global `nav` (always present in a running game).
+    let sceneList = (stats && stats.scene && stats.scene.nav && stats.scene.nav._sceneList)
+        || (window.nav && window.nav._sceneList)
+        || [];
 
 let statCharts = [];
 
@@ -44,8 +41,8 @@ let modifiableStringStats = [];
 
 let scriptHtml = (function () {
     // this will create the javscript that is used for updating values with stats in-game, passing values back and forth, and adding limits
-    let opposedDrag = "function opposedDrag(event, valueId, opposedValueId) { var statBar = event.target; var dragStartX = 0; var dragStartValue = parseInt(statBar.style.width); var value = document.getElementById(valueId); if(parseInt(value.textContent) <= 0) {let fixValue = 1; statBar.style.width = fixValue + '%'; value.textContent = fixValue.toFixed(0); } if(parseInt(value.textContent) > 100) {let fixValue = 100; statBar.style.width = fixValue + '%'; value.textContent = fixValue.toFixed(0); } var opposedValue = document.getElementById(opposedValueId); function startDrag(event) { dragStartX = event.clientX; dragStartValue = parseInt(statBar.style.width); document.addEventListener('mousemove', doDrag); document.addEventListener('mouseup', stopDrag); } function doDrag(event) { var dragDistance = event.clientX - dragStartX; var newValue = dragStartValue + (dragDistance / statBar.parentNode.clientWidth) * 100; newValue = Math.min(100, Math.max(1, newValue)); statBar.style.width = newValue + '%'; value.textContent = newValue.toFixed(0); opposedValue.textContent = (100 - newValue).toFixed(0); } function stopDrag(event) { var newValue = parseInt(value.textContent); let oldValue = window.opener.stats[valueId]; window.opener.stats[valueId] = newValue; console.log('Old Value: ', oldValue, ', New Value: ', window.opener.stats[valueId]); document.removeEventListener('mousemove', doDrag); document.removeEventListener('mouseup', stopDrag); } startDrag(event); } ";
-    let singleDrag = "function singleDrag(event, valueId) {var statBar = event.target;var dragStartX = 0;var dragStartValue = parseInt(statBar.style.width);var value = document.getElementById(valueId); if(parseInt(value.textContent) <= 0) {let fixValue = 1; statBar.style.width = fixValue + '%'; value.textContent = fixValue.toFixed(0); } if(parseInt(value.textContent) > 100) {let fixValue = 100; statBar.style.width = fixValue + '%'; value.textContent = fixValue.toFixed(0); } function startDrag(event) {dragStartX = event.clientX;dragStartValue = parseInt(statBar.style.width);document.addEventListener('mousemove', doDrag);document.addEventListener('mouseup', stopDrag);}function doDrag(event) {var dragDistance = event.clientX - dragStartX;var newValue = dragStartValue + (dragDistance / statBar.parentNode.clientWidth) * 100;newValue = Math.min(100, Math.max(1, newValue)); statBar.style.width = newValue + '%';value.textContent = newValue.toFixed(0);}function stopDrag(event) {var newValue = parseInt(value.textContent); let oldValue = window.opener.stats[valueId]; window.opener.stats[valueId] = newValue; console.log('Old Value: ', oldValue, ', New Value: ', window.opener.stats[valueId]); document.removeEventListener('mousemove', doDrag);document.removeEventListener('mouseup', stopDrag);}startDrag(event);} ";
+    let opposedDrag = "function opposedDrag(event, valueId, opposedValueId) { var statBar = event.target; var dragStartX = 0; var dragStartValue = parseInt(statBar.style.width); var value = document.getElementById(valueId); if(parseInt(value.textContent) < 0) {let fixValue = 0; statBar.style.width = fixValue + '%'; value.textContent = fixValue.toFixed(0); } if(parseInt(value.textContent) > 100) {let fixValue = 100; statBar.style.width = fixValue + '%'; value.textContent = fixValue.toFixed(0); } var opposedValue = document.getElementById(opposedValueId); function startDrag(event) { dragStartX = event.clientX; dragStartValue = parseInt(statBar.style.width); document.addEventListener('mousemove', doDrag); document.addEventListener('mouseup', stopDrag); } function doDrag(event) { var dragDistance = event.clientX - dragStartX; var newValue = dragStartValue + (dragDistance / statBar.parentNode.clientWidth) * 100; newValue = Math.min(100, Math.max(0, newValue)); statBar.style.width = newValue + '%'; value.textContent = newValue.toFixed(0); opposedValue.textContent = (100 - newValue).toFixed(0); } function stopDrag(event) { var newValue = parseInt(value.textContent); let oldValue = window.opener.stats[valueId]; window.opener.stats[valueId] = newValue; console.log('Old Value: ', oldValue, ', New Value: ', window.opener.stats[valueId]); document.removeEventListener('mousemove', doDrag); document.removeEventListener('mouseup', stopDrag); } startDrag(event); } ";
+    let singleDrag = "function singleDrag(event, valueId) {var statBar = event.target;var dragStartX = 0;var dragStartValue = parseInt(statBar.style.width);var value = document.getElementById(valueId); if(parseInt(value.textContent) < 0) {let fixValue = 0; statBar.style.width = fixValue + '%'; value.textContent = fixValue.toFixed(0); } if(parseInt(value.textContent) > 100) {let fixValue = 100; statBar.style.width = fixValue + '%'; value.textContent = fixValue.toFixed(0); } function startDrag(event) {dragStartX = event.clientX;dragStartValue = parseInt(statBar.style.width);document.addEventListener('mousemove', doDrag);document.addEventListener('mouseup', stopDrag);}function doDrag(event) {var dragDistance = event.clientX - dragStartX;var newValue = dragStartValue + (dragDistance / statBar.parentNode.clientWidth) * 100;newValue = Math.min(100, Math.max(0, newValue)); statBar.style.width = newValue + '%';value.textContent = newValue.toFixed(0);}function stopDrag(event) {var newValue = parseInt(value.textContent); let oldValue = window.opener.stats[valueId]; window.opener.stats[valueId] = newValue; console.log('Old Value: ', oldValue, ', New Value: ', window.opener.stats[valueId]); document.removeEventListener('mousemove', doDrag);document.removeEventListener('mouseup', stopDrag);}startDrag(event);} ";
     let updateStat = "function updateStat(valueId) { var value = document.getElementById(valueId); console.log(value); var inputValue = value.textContent.trim(); var inputType = value.getAttribute('data-type'); var errorValue = document.getElementById(valueId + 'Error'); var selection = window.getSelection(); var range = selection.getRangeAt(0); var start = range.startOffset; if (inputType == 'number') { inputValue = parseInt(inputValue); if (!isNaN(inputValue)) { value.textContent = Math.round(inputValue).toString(); errorValue.style.display = 'none'; } else { value.textContent = ''; errorValue.textContent = 'Please enter a valid number'; errorValue.style.display = 'inline-block'; } } else if (inputType == 'boolean') { value.textContent = inputValue; inputValue = inputValue.toLowerCase().trim(); if (inputValue == 'true' || inputValue == 'false') { errorValue.style.display = 'none'; } else { errorValue.textContent = 'Please enter true or false'; errorValue.style.display = 'inline-block'; } } else { value.textContent = inputValue; inputValue = inputValue.trim(); errorValue.style.display = 'none'; } let oldValue = window.opener.stats[valueId]; window.opener.stats[valueId] = inputValue; console.log('Old Value: ', oldValue, ', New Value: ', window.opener.stats[valueId]); range.setStart(value.firstChild, start); selection.removeAllRanges(); selection.addRange(range); } ";
 
     let modifyString = "function modifyString(key, type) { let val = ''; if (type == 'custom') { console.log('Custom String'); val = document.getElementById(key + '-input').value;} else { console.log('Selected String'); val = document.getElementById(key + '-select').value;} window.opener.stats[key] = val; console.log(val, window.opener.stats[key])}";
@@ -57,7 +54,16 @@ let scriptHtml = (function () {
 
     let showTab = "function showTab(tabIndex) { var tabs = document.querySelectorAll('.tabContentItem'); tabs.forEach(function(tab) { console.log(tab); tab.style.display = 'none'; }); tabs[tabIndex].style.display = 'block'; }";
 
-    return opposedDrag + singleDrag + updateStat + modifyString + modifyBoolean + filterTable + closeChildWindow + showTab;
+    // Toggle every visible numerical-tab checkbox to match the header checkbox.
+    // Respects any active search filter (rows hidden via display: none stay unchecked).
+    let toggleAllNumerical = "function toggleAllNumerical(master) { var boxes = document.querySelectorAll('.numericalBulkCheckbox'); boxes.forEach(function(cb) { var row = cb.closest('tr'); if (!row || row.style.display !== 'none') { cb.checked = master.checked; } }); }";
+
+    // Apply the value in #bulkNumericalValue to every checked numerical-tab row.
+    // Mirrors updateStat(): writes to the visible span AND to window.opener.stats[key],
+    // which the Proxy forwards to the game just like a manual edit.
+    let bulkSetNumerical = "function bulkSetNumerical() { var input = document.getElementById('bulkNumericalValue'); var errEl = document.getElementById('bulkNumericalError'); var parsed = parseInt(input.value, 10); if (isNaN(parsed)) { errEl.textContent = 'Please enter a valid number'; errEl.style.display = 'inline-block'; return; } var checked = document.querySelectorAll('.numericalBulkCheckbox:checked'); if (checked.length === 0) { errEl.textContent = 'Select at least one stat first'; errEl.style.display = 'inline-block'; return; } errEl.style.display = 'none'; checked.forEach(function(cb) { var key = cb.dataset.key; var span = document.getElementById(key); if (span) { span.textContent = String(parsed); } window.opener.stats[key] = parsed; }); }";
+
+    return opposedDrag + singleDrag + updateStat + modifyString + modifyBoolean + filterTable + closeChildWindow + showTab + toggleAllNumerical + bulkSetNumerical;
 })();
 
 let baseHtml = (function () {
@@ -199,8 +205,18 @@ async function GenerateNumericalHtml() {
 
     numericalHtml += `<input type="text" id="searchNumerical" class="searchInput" oninput="filterTable('searchNumerical', 'numericalTable')" placeholder="Search...">`;
 
+    // Bulk-apply controls: type a number, tick the stats you want, click Apply.
+    // The header checkbox toggles every *visible* row (respects the search filter).
+    numericalHtml += '<div class="bulkControls" style="margin: 0 0 6px 0;">';
+    numericalHtml += '<input type="number" id="bulkNumericalValue" placeholder="Value" style="width: 100px; margin-right: 6px;">';
+    numericalHtml += '<button onclick="bulkSetNumerical()">Apply to selected</button>';
+    numericalHtml += '<span id="bulkNumericalError" class="error" style="margin-left: 8px;"></span>';
+    numericalHtml += '</div>';
+
     numericalHtml += '<table id="numericalTable" class="statTable">';
-    numericalHtml += '<tr><th>Stat</th>';
+    numericalHtml += '<tr>';
+    numericalHtml += '<th style="width: 1%;"><input type="checkbox" id="bulkNumericalMaster" onclick="toggleAllNumerical(this)" title="Select all visible"></th>';
+    numericalHtml += '<th>Stat</th>';
     numericalHtml += '<th>Value</th></tr>';
 
     for (let index = 0; index < modifiableNumericalStats.length; index++) {
@@ -211,6 +227,7 @@ async function GenerateNumericalHtml() {
         if (modifiableStatChartsStats.find(x => x.key == key) === undefined) {
 
             numericalHtml += '<tr>';
+            numericalHtml += '<td><input type="checkbox" class="numericalBulkCheckbox" data-key="' + key + '"></td>';
             numericalHtml += '<td>' + title + '</td>';
             numericalHtml += '<td>';
 
@@ -263,9 +280,9 @@ async function GenerateBooleanHtml() {
 }
 
 async function GenerateStringHtml() {
-    selectType = "select";
-    customType = "custom";
-    conditional = false;
+    let selectType = "select";
+    let customType = "custom";
+    let conditional = false;
 
     let stringHtml = stringBuilder;
 
@@ -494,7 +511,9 @@ function ParseFileText(text) {
                 line = removeItalic(line);
             }
 
-            if (line.endsWith('}') && line.includes('$', '{')) {
+            // `includes(needle, fromIndex)` - the original `includes('$', '{')`
+            // coerced '{' to NaN -> 0, so only '$' was actually checked.
+            if (line.endsWith('}') && line.includes('${')) {
                 let type = 'text';
                 // check the number of variables in the line
                 let openBrackets = line.split('{').length - 1;
@@ -1050,3 +1069,10 @@ let myInterval = setInterval(async function () {
         }
     }
 }, 3000);
+
+    // Inline `onclick="loadCheats()"` on the injected button needs a global,
+    // and `window.__cheatMasterInterval` is the handle the next reload uses
+    // to tear this instance down (see IIFE guard at the top).
+    window.loadCheats = loadCheats;
+    window.__cheatMasterInterval = myInterval;
+})();
