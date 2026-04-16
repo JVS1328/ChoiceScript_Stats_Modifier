@@ -1,34 +1,31 @@
-let btns = document.getElementById("buttons");
-let cheatButton = document.getElementById("cheatButton");
-let loadCheatButton = false;
-if (!cheatButton) {
-    // Cheats have not been loaded yet
-    loadCheatButton = true;
-}
-else {
-    // Cheats have already been loaded
-    delete url;
-    delete baseURL;
-    delete statCharts;
-    delete chartPromise;
-    delete statsProxy;
-    delete modifiableStats;
-    delete handleStatsChange;
-    delete updateStats;
-    delete loadCheats;
-    clearInterval(myInterval);
-    delete myInterval;
-}
+(function () {
+    // Make the whole script idempotent. Re-injecting the `<script>` tag
+    // re-runs the file at top level, and the previous `let`-based approach
+    // blew up at parse time with "Identifier 'btns' has already been declared"
+    // - its "else" cleanup branch could never run. An IIFE + one flag on
+    // `window` gives us safe, repeatable loads with a single teardown path.
+    if (window.__cheatMasterInterval) {
+        clearInterval(window.__cheatMasterInterval);
+        window.__cheatMasterInterval = null;
+    }
 
-let childWindow;
-// get the current URL
-let url = window.location.href;
-// strip off the index.html or mygame/ from the end of the URL
-let baseURL = url.replace(/(index\.html$|mygame\/$)/, '');
+    let btns = document.getElementById("buttons");
+    let cheatButton = document.getElementById("cheatButton");
+    let loadCheatButton = !cheatButton;
 
-console.log("Using Base Game URL: " + baseURL);
+    let childWindow;
+    // get the current URL
+    let url = window.location.href;
+    // strip off the index.html or mygame/ from the end of the URL
+    let baseURL = url.replace(/(index\.html$|mygame\/$)/, '');
 
-let sceneList = stats.scene.nav._sceneList;
+    console.log("Using Base Game URL: " + baseURL);
+
+    // `stats.scene` is only populated while the stat-chart page is rendering,
+    // so fall back to the global `nav` (always present in a running game).
+    let sceneList = (stats && stats.scene && stats.scene.nav && stats.scene.nav._sceneList)
+        || (window.nav && window.nav._sceneList)
+        || [];
 
 let statCharts = [];
 
@@ -263,9 +260,9 @@ async function GenerateBooleanHtml() {
 }
 
 async function GenerateStringHtml() {
-    selectType = "select";
-    customType = "custom";
-    conditional = false;
+    let selectType = "select";
+    let customType = "custom";
+    let conditional = false;
 
     let stringHtml = stringBuilder;
 
@@ -494,7 +491,9 @@ function ParseFileText(text) {
                 line = removeItalic(line);
             }
 
-            if (line.endsWith('}') && line.includes('$', '{')) {
+            // `includes(needle, fromIndex)` - the original `includes('$', '{')`
+            // coerced '{' to NaN -> 0, so only '$' was actually checked.
+            if (line.endsWith('}') && line.includes('${')) {
                 let type = 'text';
                 // check the number of variables in the line
                 let openBrackets = line.split('{').length - 1;
@@ -1050,3 +1049,10 @@ let myInterval = setInterval(async function () {
         }
     }
 }, 3000);
+
+    // Inline `onclick="loadCheats()"` on the injected button needs a global,
+    // and `window.__cheatMasterInterval` is the handle the next reload uses
+    // to tear this instance down (see IIFE guard at the top).
+    window.loadCheats = loadCheats;
+    window.__cheatMasterInterval = myInterval;
+})();
